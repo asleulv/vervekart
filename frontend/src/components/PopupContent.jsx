@@ -1,7 +1,40 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { singleUnitColors } from '../colors';
 
 export function PopupContent({ blokkId, units, isBlock, handleStatusUpdate }) {
+  // Local state to track pending status updates
+  const [localStatuses, setLocalStatuses] = useState({});
+
+  // Reset local state when units change (new popup opened)
+  useEffect(() => {
+    setLocalStatuses({});
+  }, [blokkId]);
+
+  // Get effective status (local override or original)
+  const getEffectiveStatus = (unit) => {
+    return localStatuses[unit.id] || unit.status;
+  };
+
+  // Handle status update with optimistic UI
+  const handleLocalStatusUpdate = (blokkId, unitId, newStatus) => {
+    // Immediately update local state
+    setLocalStatuses(prev => ({
+      ...prev,
+      [unitId]: newStatus
+    }));
+
+    // Call parent handler (fire-and-forget)
+    handleStatusUpdate(blokkId, unitId, newStatus).catch(error => {
+      console.error('Status update failed:', error);
+      // Revert only on error
+      setLocalStatuses(prev => {
+        const updated = { ...prev };
+        delete updated[unitId];
+        return updated;
+      });
+    });
+  };
+
   // Grupér leiligheiter etter etasje for blokker
   const groupByFloor = (units) => {
     const grouped = units.reduce((acc, unit) => {
@@ -111,189 +144,195 @@ export function PopupContent({ blokkId, units, isBlock, handleStatusUpdate }) {
                 
                 {/* Leiligheiter på denne etasjen */}
                 <div style={{ display: 'grid', gap: '12px', paddingLeft: '8px' }}>
-                  {floorUnits.map((unit) => (
-                    <div
-                      key={unit.id}
-                      style={{
-                        padding: '16px 20px',
-                        background: '#ffffff',
-                        borderRadius: '12px',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 4px 6px rgba(0,0,0,0.03)',
-                        border: '1px solid #e2e8f0',
-                      }}
-                    >
-                      <p
-                        style={{
-                          margin: '0 0 12px 0',
-                          fontWeight: 600,
-                          fontSize: '0.95rem',
-                          color: '#475569',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                        }}
-                      >
-                        📍 {unit.adresse}
-                      </p>
-
+                  {floorUnits.map((unit) => {
+                    const effectiveStatus = getEffectiveStatus(unit);
+                    return (
                       <div
+                        key={unit.id}
                         style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(3, 1fr)',
-                          gap: '8px',
+                          padding: '16px 20px',
+                          background: '#ffffff',
+                          borderRadius: '12px',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 4px 6px rgba(0,0,0,0.03)',
+                          border: '1px solid #e2e8f0',
                         }}
                       >
-                        {['Ja', 'Nei', 'Ikke hjemme'].map((statusOption) => {
-                          const isSelected = unit.status === statusOption;
-                          const colors = singleUnitColors;
-                          return (
-                            <button
-                              key={statusOption}
-                              onClick={() => {
-                                const newStat = isSelected ? 'Ubehandlet' : statusOption;
-                                handleStatusUpdate(blokkId, unit.id, newStat);
-                              }}
-                              style={{
-                                padding: '12px 8px',
-                                outline: 'none',
-                                fontSize: '0.85rem',
-                                fontWeight: 600,
-                                backgroundColor: isSelected
-                                  ? colors[statusOption].fill
-                                  : '#ffffff',
-                                color: isSelected ? 'white' : '#475569',
-                                border: isSelected
-                                  ? `2px solid ${colors[statusOption].border}`
-                                  : '2px solid #e2e8f0',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                userSelect: 'none',
-                                textAlign: 'center',
-                                boxShadow: isSelected
-                                  ? `0 4px 12px ${colors[statusOption].fill}40`
-                                  : '0 1px 2px rgba(0, 0, 0, 0.05)',
-                                transform: isSelected ? 'translateY(-1px)' : 'translateY(0)',
-                                minHeight: '40px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                              onMouseEnter={(e) => {
-                                if (!isSelected) {
-                                  e.target.style.backgroundColor = '#f8fafc';
-                                  e.target.style.transform = 'translateY(-1px)';
-                                }
-                              }}
-                              onMouseLeave={(e) => {
-                                if (!isSelected) {
-                                  e.target.style.backgroundColor = '#ffffff';
-                                  e.target.style.transform = 'translateY(0)';
-                                }
-                              }}
-                            >
-                              {statusOption}
-                            </button>
-                          );
-                        })}
+                        <p
+                          style={{
+                            margin: '0 0 12px 0',
+                            fontWeight: 600,
+                            fontSize: '0.95rem',
+                            color: '#475569',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                          }}
+                        >
+                          📍 {unit.adresse}
+                        </p>
+
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(3, 1fr)',
+                            gap: '8px',
+                          }}
+                        >
+                          {['Ja', 'Nei', 'Ikke hjemme'].map((statusOption) => {
+                            const isSelected = effectiveStatus === statusOption;
+                            const colors = singleUnitColors;
+                            return (
+                              <button
+                                key={statusOption}
+                                onClick={() => {
+                                  const newStat = isSelected ? 'Ubehandlet' : statusOption;
+                                  handleLocalStatusUpdate(blokkId, unit.id, newStat);
+                                }}
+                                style={{
+                                  padding: '12px 8px',
+                                  outline: 'none',
+                                  fontSize: '0.85rem',
+                                  fontWeight: 600,
+                                  backgroundColor: isSelected
+                                    ? colors[statusOption].fill
+                                    : '#ffffff',
+                                  color: isSelected ? 'white' : '#475569',
+                                  border: isSelected
+                                    ? `2px solid ${colors[statusOption].border}`
+                                    : '2px solid #e2e8f0',
+                                  borderRadius: '8px',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                  userSelect: 'none',
+                                  textAlign: 'center',
+                                  boxShadow: isSelected
+                                    ? `0 4px 12px ${colors[statusOption].fill}40`
+                                    : '0 1px 2px rgba(0, 0, 0, 0.05)',
+                                  transform: isSelected ? 'translateY(-1px)' : 'translateY(0)',
+                                  minHeight: '40px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isSelected) {
+                                    e.target.style.backgroundColor = '#f8fafc';
+                                    e.target.style.transform = 'translateY(-1px)';
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isSelected) {
+                                    e.target.style.backgroundColor = '#ffffff';
+                                    e.target.style.transform = 'translateY(0)';
+                                  }
+                                }}
+                              >
+                                {statusOption}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ));
           })()
         ) : (
           // ENEBOLIG-VISNING: Original layout
-          units.map((unit, i) => (
-            <div
-              key={unit.id}
-              style={{
-                marginBottom: i !== units.length - 1 ? 24 : 0,
-                padding: '20px',
-                background: '#ffffff',
-                borderRadius: '12px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.04)',
-                border: '1px solid #e2e8f0',
-              }}
-            >
-              <p
-                style={{
-                  margin: '0 0 16px 0',
-                  fontWeight: 600,
-                  fontSize: '1.1rem',
-                  color: '#334155',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                📍 {unit.adresse}
-              </p>
-
+          units.map((unit, i) => {
+            const effectiveStatus = getEffectiveStatus(unit);
+            return (
               <div
+                key={unit.id}
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: '12px',
+                  marginBottom: i !== units.length - 1 ? 24 : 0,
+                  padding: '20px',
+                  background: '#ffffff',
+                  borderRadius: '12px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.04)',
+                  border: '1px solid #e2e8f0',
                 }}
               >
-                {['Ja', 'Nei', 'Ikke hjemme'].map((statusOption) => {
-                  const isSelected = unit.status === statusOption;
-                  const colors = singleUnitColors;
-                  return (
-                    <button
-                      key={statusOption}
-                      onClick={() => {
-                        const newStat = isSelected ? 'Ubehandlet' : statusOption;
-                        handleStatusUpdate(blokkId, unit.id, newStat);
-                      }}
-                      style={{
-                        padding: '16px 12px',
-                        outline: 'none',
-                        fontSize: '1rem',
-                        fontWeight: 600,
-                        backgroundColor: isSelected
-                          ? colors[statusOption].fill
-                          : '#ffffff',
-                        color: isSelected ? 'white' : '#475569',
-                        border: isSelected
-                          ? `2px solid ${colors[statusOption].border}`
-                          : '2px solid #e2e8f0',
-                        borderRadius: '12px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                        userSelect: 'none',
-                        textAlign: 'center',
-                        boxShadow: isSelected
-                          ? `0 4px 12px ${colors[statusOption].fill}40`
-                          : '0 1px 2px rgba(215, 9, 9, 0.05)',
-                        transform: isSelected ? 'translateY(-2px)' : 'translateY(0)',
-                        minHeight: '56px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isSelected) {
-                          e.target.style.backgroundColor = '#f8fafc';
-                          e.target.style.transform = 'translateY(-1px)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isSelected) {
-                          e.target.style.backgroundColor = '#ffffff';
-                          e.target.style.transform = 'translateY(0)';
-                        }
-                      }}
-                    >
-                      {statusOption}
-                    </button>
-                  );
-                })}
+                <p
+                  style={{
+                    margin: '0 0 16px 0',
+                    fontWeight: 600,
+                    fontSize: '1.1rem',
+                    color: '#334155',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  📍 {unit.adresse}
+                </p>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '12px',
+                  }}
+                >
+                  {['Ja', 'Nei', 'Ikke hjemme'].map((statusOption) => {
+                    const isSelected = effectiveStatus === statusOption;
+                    const colors = singleUnitColors;
+                    return (
+                      <button
+                        key={statusOption}
+                        onClick={() => {
+                          const newStat = isSelected ? 'Ubehandlet' : statusOption;
+                          handleLocalStatusUpdate(blokkId, unit.id, newStat);
+                        }}
+                        style={{
+                          padding: '16px 12px',
+                          outline: 'none',
+                          fontSize: '1rem',
+                          fontWeight: 600,
+                          backgroundColor: isSelected
+                            ? colors[statusOption].fill
+                            : '#ffffff',
+                          color: isSelected ? 'white' : '#475569',
+                          border: isSelected
+                            ? `2px solid ${colors[statusOption].border}`
+                            : '2px solid #e2e8f0',
+                          borderRadius: '12px',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                          userSelect: 'none',
+                          textAlign: 'center',
+                          boxShadow: isSelected
+                            ? `0 4px 12px ${colors[statusOption].fill}40`
+                            : '0 1px 2px rgba(0, 0, 0, 0.05)',
+                          transform: isSelected ? 'translateY(-2px)' : 'translateY(0)',
+                          minHeight: '56px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) {
+                            e.target.style.backgroundColor = '#f8fafc';
+                            e.target.style.transform = 'translateY(-1px)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) {
+                            e.target.style.backgroundColor = '#ffffff';
+                            e.target.style.transform = 'translateY(0)';
+                          }
+                        }}
+                      >
+                        {statusOption}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

@@ -4,6 +4,7 @@ import L from 'leaflet';
 import { singleUnitColors, blockRing } from '../colors';
 import { getBlockColor } from '../utils/mapUtils';
 import { PopupContent } from './PopupContent';
+import { SuccessAnimation } from './SuccessAnimation';
 
 export const Markers = React.memo(function Markers({ visibleBlocks, updateUnitStatus }) {
   const map = useMap();
@@ -55,30 +56,35 @@ export const Markers = React.memo(function Markers({ visibleBlocks, updateUnitSt
     const isBlock = currentBlock && currentBlock.units.length > 1;
 
     if (newStatus === 'Ja') {
-      // 🎯 FINN MARKER-POSISJON PÅ SKJERMEN
+      // 🎯 IMPROVED POSITIONING FOR iPAD/MOBILE
       const block = blocksToShow.find(b => b.blokkId === blokkId);
       if (block) {
         const markerLatLng = L.latLng(block.lat, block.lon);
         const markerPoint = map.latLngToContainerPoint(markerLatLng);
         
-        // Juster for TopBar høgd på mobile/iPad
-        const topBarOffset = isMobile ? 64 : 64; // TopBar er 64px høg
+        // Get the map container's position relative to viewport
+        const mapContainer = map.getContainer();
+        const mapRect = mapContainer.getBoundingClientRect();
+        
+        // Calculate absolute position in viewport
+        const absoluteX = mapRect.left + markerPoint.x;
+        const absoluteY = mapRect.top + markerPoint.y;
         
         setRingExplosion({ 
           blokkId, 
           unitId, 
           timestamp: Date.now(),
-          x: markerPoint.x,
-          y: markerPoint.y + topBarOffset // Legg til TopBar offset
+          x: absoluteX,
+          y: absoluteY
         });
       } else {
-        // Fallback til senter om me ikkje finn marker
+        // Fallback to center
         setRingExplosion({ 
           blokkId, 
           unitId, 
           timestamp: Date.now(),
           x: window.innerWidth / 2,
-          y: (window.innerHeight / 2) + (isMobile ? 32 : 32)
+          y: window.innerHeight / 2
         });
       }
 
@@ -105,122 +111,30 @@ export const Markers = React.memo(function Markers({ visibleBlocks, updateUnitSt
 
   // 📱 MOBILE-OPTIMALISERT STØRRELSER
   const getMarkerRadius = () => {
-    return isMobile ? 12 : 10; // SAME størrelse for ALLE markers
+    return isMobile ? 12 : 10;
   };
 
   const getBlockRingRadius = () => {
-    return isMobile ? 16 : 14; // Ring rundt blokker - større enn marker
+    return isMobile ? 16 : 14;
   };
 
   const getBorderWeight = () => {
-    return isMobile ? 3 : 2; // Tjukkare border på mobile
+    return isMobile ? 3 : 2;
   };
 
   return (
     <>
-      {/* 🎯 BULLSEYE RING-EKSPLOSJON - MARKER-POSISJONERT */}
-      {ringExplosion && (
-        <>
-          <div style={{
-            position: 'absolute',
-            top: ringExplosion.y + 'px',
-            left: ringExplosion.x + 'px',
-            transform: 'translate(-50%, -50%)',
-            width: '20px',
-            height: '20px',
-            borderRadius: '50%',
-            border: '6px solid #10b981',
-            backgroundColor: 'transparent',
-            animation: 'ringExplosion 1.5s ease-out forwards',
-            zIndex: 9999,
-            pointerEvents: 'none'
-          }} />
-
-          <div style={{
-            position: 'absolute',
-            top: ringExplosion.y + 'px',
-            left: ringExplosion.x + 'px',
-            transform: 'translate(-50%, -50%)',
-            width: '20px',
-            height: '20px',
-            borderRadius: '50%',
-            border: '4px solid #059669',
-            backgroundColor: 'transparent',
-            animation: 'ringExplosion 1.5s ease-out 0.1s forwards',
-            zIndex: 9998,
-            pointerEvents: 'none'
-          }} />
-
-          <div style={{
-            position: 'absolute',
-            top: ringExplosion.y + 'px',
-            left: ringExplosion.x + 'px',
-            transform: 'translate(-50%, -50%)',
-            width: '20px',
-            height: '20px',
-            borderRadius: '50%',
-            border: '3px solid #34d399',
-            backgroundColor: 'transparent',
-            animation: 'ringExplosion 1.5s ease-out 0.2s forwards',
-            zIndex: 9997,
-            pointerEvents: 'none'
-          }} />
-
-          <div style={{
-            position: 'absolute',
-            top: ringExplosion.y + 'px',
-            left: ringExplosion.x + 'px',
-            transform: 'translate(-50%, -50%)',
-            fontSize: isMobile ? '2.5rem' : '3rem',
-            animation: 'centerPulse 1.5s ease-out forwards',
-            zIndex: 10000,
-            pointerEvents: 'none'
-          }}>
-            🤩
-          </div>
-        </>
-      )}
-
-      <style jsx>{`
-        @keyframes ringExplosion {
-          0% {
-            width: 20px;
-            height: 20px;
-            opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
-          }
-          100% {
-            width: ${isMobile ? '400px' : '600px'};
-            height: ${isMobile ? '400px' : '600px'};
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(1);
-          }
-        }
-        
-        @keyframes centerPulse {
-          0% {
-            transform: translate(-50%, -50%) scale(0);
-            opacity: 0;
-          }
-          20% {
-            transform: translate(-50%, -50%) scale(1.5);
-            opacity: 1;
-          }
-          80% {
-            transform: translate(-50%, -50%) scale(1);
-            opacity: 1;
-          }
-          100% {
-            transform: translate(-50%, -50%) scale(0.8);
-            opacity: 0;
-          }
-        }
-      `}</style>
+      {/* 🎯 SUCCESS ANIMATION */}
+      <SuccessAnimation 
+        explosion={ringExplosion}
+        isMobile={isMobile}
+        onComplete={() => setRingExplosion(null)}
+      />
 
       {blocksToShow.map(({ blokkId, lat, lon, units }) => {
         const isBlock = units.length > 1;
         const color = getBlockColor(units);
-        const markerRadius = getMarkerRadius(); // Same for alle
+        const markerRadius = getMarkerRadius();
         const ringRadius = getBlockRingRadius();
         const borderWeight = getBorderWeight();
 

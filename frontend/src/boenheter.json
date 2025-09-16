@@ -1,5 +1,0 @@
-[
-  { "id": 1, "position": [59.91, 10.75], "adresse": "Gate 1, 0101 Oslo", "status": "Ubehandlet" },
-  { "id": 2, "position": [59.912, 10.752], "adresse": "Gate 2, 0102 Oslo", "status": "Ubehandlet" },
-  { "id": 3, "position": [59.913, 10.753], "adresse": "Gate 3, 0103 Oslo", "status": "Ubehandlet" }
-]
