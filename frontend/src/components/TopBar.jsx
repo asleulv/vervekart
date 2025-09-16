@@ -13,7 +13,7 @@ export function TopBar({ currentUser, onUserSet, triggerUpdate, onLocationFound 
     const fetchStats = async () => {
       try {
         // 👈 VELG ENDPOINT basert på brytar
-        const endpoint = showDaily ? '/api/daily-stats' : '/api/advanced-stats';
+        const endpoint = showDaily ? '/daily-stats' : '/advanced-stats';
         const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}${endpoint}`);
         const data = await response.json();
         
