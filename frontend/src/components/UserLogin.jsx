@@ -10,7 +10,7 @@ export function UserLogin({ onUserSet, currentUser }) {
 
     setIsRegistering(true);
     try {
-      const response = await fetch('http://localhost:3099/api/register-user', {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/register-user`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

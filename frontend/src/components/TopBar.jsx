@@ -14,7 +14,7 @@ export function TopBar({ currentUser, onUserSet, triggerUpdate, onLocationFound 
       try {
         // 👈 VELG ENDPOINT basert på brytar
         const endpoint = showDaily ? '/api/daily-stats' : '/api/advanced-stats';
-        const response = await fetch(`http://localhost:3099${endpoint}`);
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}${endpoint}`);
         const data = await response.json();
         
         const userActivity = data.user_activity?.find(u => u.changed_by_name === currentUser.name) || {};

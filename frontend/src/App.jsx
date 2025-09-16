@@ -113,7 +113,7 @@ export default function App() {
     if (unit) {
       try {
         // 💾 SEND BRUKARINFO TIL BACKEND
-        const response = await fetch('http://localhost:3099/api/save-status', {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/save-status`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
