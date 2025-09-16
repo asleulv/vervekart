@@ -3,7 +3,10 @@ require('dotenv').config();
 const sqlite3 = require('sqlite3').verbose();
 
 // Use your exact local database path
-const db = new sqlite3.Database('./vervekart.db');
+// const db = new sqlite3.Database('./vervekart.db');
+
+// Use your exact production database path
+const db = new sqlite3.Database('/var/www/vervekart-api/vervekart.db');
 
 console.log('🔧 Starting LOCAL coordinate migration...');
 console.log('📂 Database: ./vervekart.db');

@@ -2,7 +2,8 @@
 require('dotenv').config();
 const sqlite3 = require('sqlite3').verbose();
 
-const db = new sqlite3.Database('./vervekart.db');
+// const db = new sqlite3.Database('./vervekart.db');
+const db = new sqlite3.Database('/var/www/vervekart-api/vervekart.db');
 
 console.log('🔧 Creating missing indexes...');
 
