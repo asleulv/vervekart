@@ -4,15 +4,22 @@ export function TopBar({ currentUser, onUserSet, triggerUpdate, onLocationFound 
   const [stats, setStats] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [lastAccuracy, setLastAccuracy] = useState(null);
-  const [showDaily, setShowDaily] = useState(true); // 👈 NY: Standard = "I dag"
+  const [showDaily, setShowDaily] = useState(true);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-  // Automatisk oppdatering av statistikk
+  // Responsive check
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Stats fetching (same as before)
   useEffect(() => {
     if (!currentUser) return;
 
     const fetchStats = async () => {
       try {
-        // 👈 VELG ENDPOINT basert på brytar
         const endpoint = showDaily ? '/daily-stats' : '/advanced-stats';
         const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}${endpoint}`);
         const data = await response.json();
@@ -24,7 +31,7 @@ export function TopBar({ currentUser, onUserSet, triggerUpdate, onLocationFound 
           ja: userActivity.ja_count || 0,
           nei: userActivity.nei_count || 0,
           ikke_hjemme: userActivity.ikke_hjemme_count || 0,
-          period: showDaily ? 'I dag' : 'Totalt' // 👈 For visning
+          period: showDaily ? 'I dag' : 'Totalt'
         };
         
         setStats(newStats);
@@ -36,9 +43,9 @@ export function TopBar({ currentUser, onUserSet, triggerUpdate, onLocationFound 
     fetchStats();
     const interval = setInterval(fetchStats, 30000);
     return () => clearInterval(interval);
-  }, [currentUser, triggerUpdate, showDaily]); // 👈 Legg til showDaily som dependency
+  }, [currentUser, triggerUpdate, showDaily]);
 
-  // 📍 FINN MIN POSISJON MED HØGARE PRESISJON
+  // Geolocation (same function)
   const findMyLocation = () => {
     if (!navigator.geolocation) {
       alert('Geolokalisering er ikkje støtta i din nettlesar');
@@ -52,10 +59,8 @@ export function TopBar({ currentUser, onUserSet, triggerUpdate, onLocationFound 
         const { latitude, longitude, accuracy } = position.coords;
         console.log(`📍 Posisjon: ${latitude}, ${longitude} (±${Math.round(accuracy)}m)`);
         
-        // 👈 LAGRE NØYAKTIGHEIT
         setLastAccuracy(Math.round(accuracy));
         
-        // Send posisjon med accuracy til App.jsx
         if (onLocationFound) {
           onLocationFound({ 
             lat: latitude, 
@@ -102,170 +107,229 @@ export function TopBar({ currentUser, onUserSet, triggerUpdate, onLocationFound 
         top: 0,
         left: 0,
         right: 0,
-        height: '60px',
-        background: 'linear-gradient(135deg, #1f2937 0%, #374151 100%)',
-        color: 'white',
+        height: '64px',
+        background: '#ffffff',
+        borderBottom: '1px solid #e5e7eb',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0 20px',
+        padding: isMobile ? '0 16px' : '0 24px',
         zIndex: 1000,
-        boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
         fontFamily: 'system-ui'
       }}>
-        {/* VENSTRE SIDE - Logo og brukar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
-            🗳️ Vervekart
-          </div>
-          <div style={{ 
-            background: 'rgba(25, 166, 217, 0.96)', 
-            padding: '8px 12px', 
-            borderRadius: '20px',
+        
+        {/* VENSTRE SIDE - Logo og User Info */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '12px' : '20px' }}>
+          {/* Logo - berre på desktop */}
+          {!isMobile && (
+            <div style={{ 
+              fontSize: '20px', 
+              fontWeight: '700',
+              color: '#1f2937'
+            }}>
+              🗳️ Vervekart
+            </div>
+          )}
+          
+          {/* USER INFO - Clean flat design */}
+          <div style={{
+            background: '#f3f4f6',
+            padding: '8px 16px',
+            borderRadius: '8px',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px'
+            gap: '8px',
+            color: '#374151',
+            fontSize: '14px',
+            fontWeight: '500'
           }}>
-            <span style={{ fontSize: '14px' }}>👤</span>
-            <span style={{ fontSize: '14px', fontWeight: '500' }}>{currentUser.name}</span>
+            <span>👤</span>
+            <span>{currentUser.name}</span>
+            {lastAccuracy && lastAccuracy <= 100 && (
+              <span style={{ fontSize: '12px', opacity: 0.6 }}>📍</span>
+            )}
           </div>
+          
+          {/* LOCATION BUTTON - Clean blue button */}
+          <button
+            onClick={findMyLocation}
+            disabled={locationLoading}
+            title={locationLoading ? 'Hentar posisjon...' : lastAccuracy ? `Finn meg (±${lastAccuracy}m)` : 'Finn min posisjon'}
+            style={{
+              background: locationLoading ? '#9ca3af' : '#3b82f6',
+              border: 'none',
+              color: 'white',
+              width: '44px',
+              height: '44px',
+              borderRadius: '8px',
+              cursor: locationLoading ? 'not-allowed' : 'pointer',
+              fontSize: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              outline: 'none',
+              transition: 'background-color 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              if (!locationLoading) {
+                e.target.style.backgroundColor = '#2563eb';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!locationLoading) {
+                e.target.style.backgroundColor = '#3b82f6';
+              }
+            }}
+          >
+            {locationLoading ? '⏳' : '🎯'}
+          </button>
         </div>
 
-        {/* SENTER - Statistikk med brytar */}
+        {/* SENTER - Clean flat statistics */}
         <div style={{ 
           display: 'flex', 
           alignItems: 'center', 
-          gap: '15px',
-          fontSize: '14px'
+          gap: isMobile ? '8px' : '12px',
         }}>
           {stats ? (
             <>
+              {/* JA - clean green */}
               <div style={{ 
-                background: 'rgba(34, 197, 94, 0.2)', 
-                padding: '4px 8px', 
-                borderRadius: '12px',
+                background: '#dcfce7',
+                color: '#166534',
+                padding: '8px 12px', 
+                borderRadius: '8px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px'
+                gap: '6px',
+                fontSize: '14px',
+                fontWeight: '600'
               }}>
                 <span>✅</span>
                 <span>{stats.ja}</span>
               </div>
+              
+              {/* NEI - clean red */}
               <div style={{ 
-                background: 'rgba(239, 68, 68, 0.2)', 
-                padding: '4px 8px', 
-                borderRadius: '12px',
+                background: '#fee2e2',
+                color: '#991b1b',
+                padding: '8px 12px', 
+                borderRadius: '8px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px'
+                gap: '6px',
+                fontSize: '14px',
+                fontWeight: '600'
               }}>
                 <span>❌</span>
                 <span>{stats.nei}</span>
               </div>
+              
+              {/* IKKE HJEMME - clean gray */}
               <div style={{ 
-                background: 'rgba(156, 163, 175, 0.2)', 
-                padding: '4px 8px', 
-                borderRadius: '12px',
+                background: '#f3f4f6',
+                color: '#374151',
+                padding: '8px 12px', 
+                borderRadius: '8px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px'
+                gap: '6px',
+                fontSize: '14px',
+                fontWeight: '600'
               }}>
                 <span>🚪</span>
                 <span>{stats.ikke_hjemme}</span>
               </div>
               
-              {/* 🔄 BRYTAR-KNAPP */}
-              <button
-                onClick={() => setShowDaily(!showDaily)}
-                style={{
-                  background: 'rgba(59, 130, 246, 0.2)',
-                  border: '1px solid rgba(59, 130, 246, 0.3)',
-                  color: 'white',
-                  padding: '4px 8px',
-                  borderRadius: '12px',
-                  cursor: 'pointer',
-                  fontSize: '11px',
-                  outline: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <span>{showDaily ? '📅' : '📊'}</span>
-                <span>{stats.period}: {stats.total}</span>
-              </button>
+              {/* TOGGLE BUTTON - clean design */}
+              {!isMobile && (
+                <button
+                  onClick={() => setShowDaily(!showDaily)}
+                  style={{
+                    background: '#e0e7ff',
+                    color: '#3730a3',
+                    border: 'none',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    outline: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'background-color 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.backgroundColor = '#c7d2fe';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.backgroundColor = '#e0e7ff';
+                  }}
+                >
+                  <span>{showDaily ? '📅' : '📊'}</span>
+                  <span>{stats.period}: {stats.total}</span>
+                </button>
+              )}
             </>
           ) : (
-            <div style={{ color: '#9ca3af', fontSize: '12px' }}>
-              Hentar statistikk...
+            <div style={{ 
+              color: '#9ca3af', 
+              fontSize: isMobile ? '12px' : '14px',
+              fontStyle: 'italic'
+            }}>
+              Hentar...
             </div>
           )}
         </div>
 
-        {/* HØGRE SIDE - Geolokalisering og logg ut */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* 📍 FINN MEG-KNAPP MED ACCURACY */}
-          <button 
-            onClick={findMyLocation}
-            disabled={locationLoading}
-            style={{
-              background: locationLoading ? 'rgba(156, 163, 175, 0.2)' : 'rgba(59, 130, 246, 0.2)',
-              border: 'none',
-              color: 'white',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              cursor: locationLoading ? 'not-allowed' : 'pointer',
-              fontSize: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px',
-              outline: 'none'
-            }}
-          >
-            <span>{locationLoading ? '⏳' : '📍'}</span>
-            <span>
-              {locationLoading 
-                ? 'Hentar...' 
-                : lastAccuracy 
-                  ? `Finn meg (±${lastAccuracy}m)` 
-                  : 'Finn meg'
-              }
-            </span>
-          </button>
-
-          <button 
-            onClick={() => onUserSet(null)}
-            style={{
-              background: 'rgba(239, 68, 68, 0.2)',
-              border: 'none',
-              color: 'white',
-              padding: '8px 15px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              outline: 'none'
-            }}
-          >
-            Logg ut
-          </button>
-        </div>
+        {/* HØGRE SIDE - Clean red logout button */}
+        <button 
+          onClick={() => onUserSet(null)}
+          title="Logg ut"
+          style={{
+            background: '#ef4444',
+            border: 'none',
+            color: 'white',
+            width: '44px',
+            height: '44px',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            outline: 'none',
+            transition: 'background-color 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#dc2626';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = '#ef4444';
+          }}
+        >
+          ✕
+        </button>
       </div>
 
-      {/* 📍 GPS NØYAKTIGHEITS-ÅTVARING */}
+      {/* GPS Warning - clean design */}
       {lastAccuracy && lastAccuracy > 100 && (
         <div style={{
           position: 'fixed',
-          top: '70px',
+          top: '76px',
           right: '20px',
-          background: 'rgba(239, 68, 68, 0.9)',
-          color: 'white',
+          background: '#fef2f2',
+          color: '#991b1b',
+          border: '1px solid #fecaca',
           padding: '8px 12px',
-          borderRadius: '6px',
+          borderRadius: '8px',
           fontSize: '12px',
           zIndex: 1001,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+          fontWeight: '500'
         }}>
-          ⚠️ GPS unøyaktig (±{lastAccuracy}m). Gå utandørs for betre presisjon.
+          ⚠️ GPS unøyaktig (±{lastAccuracy}m)
         </div>
       )}
     </>

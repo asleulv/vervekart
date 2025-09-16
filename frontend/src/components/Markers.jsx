@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { CircleMarker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
 import { singleUnitColors, blockRing } from '../colors';
 import { getBlockColor } from '../utils/mapUtils';
 import { PopupContent } from './PopupContent';
@@ -9,14 +10,21 @@ export const Markers = React.memo(function Markers({ visibleBlocks, updateUnitSt
   const [zoom, setZoom] = useState(map.getZoom());
   const [openPopupBlockId, setOpenPopupBlockId] = useState(null);
   const [ringExplosion, setRingExplosion] = useState(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const explosionTimeoutRef = useRef(null);
-  const popupRefs = useRef({}); // 👈 NY: Referansar til popup-ar
+  const popupRefs = useRef({});
 
   useEffect(() => {
     const onZoom = () => setZoom(map.getZoom());
     map.on('zoomend', onZoom);
     return () => map.off('zoomend', onZoom);
   }, [map]);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => () => {
     if (explosionTimeoutRef.current) clearTimeout(explosionTimeoutRef.current);
@@ -47,8 +55,32 @@ export const Markers = React.memo(function Markers({ visibleBlocks, updateUnitSt
     const isBlock = currentBlock && currentBlock.units.length > 1;
 
     if (newStatus === 'Ja') {
-      // 🎯 RING-EKSPLOSJON for alle "Ja"-svar
-      setRingExplosion({ blokkId, unitId, timestamp: Date.now() });
+      // 🎯 FINN MARKER-POSISJON PÅ SKJERMEN
+      const block = blocksToShow.find(b => b.blokkId === blokkId);
+      if (block) {
+        const markerLatLng = L.latLng(block.lat, block.lon);
+        const markerPoint = map.latLngToContainerPoint(markerLatLng);
+        
+        // Juster for TopBar høgd på mobile/iPad
+        const topBarOffset = isMobile ? 64 : 64; // TopBar er 64px høg
+        
+        setRingExplosion({ 
+          blokkId, 
+          unitId, 
+          timestamp: Date.now(),
+          x: markerPoint.x,
+          y: markerPoint.y + topBarOffset // Legg til TopBar offset
+        });
+      } else {
+        // Fallback til senter om me ikkje finn marker
+        setRingExplosion({ 
+          blokkId, 
+          unitId, 
+          timestamp: Date.now(),
+          x: window.innerWidth / 2,
+          y: (window.innerHeight / 2) + (isMobile ? 32 : 32)
+        });
+      }
 
       explosionTimeoutRef.current = setTimeout(() => {
         setRingExplosion(null);
@@ -71,16 +103,28 @@ export const Markers = React.memo(function Markers({ visibleBlocks, updateUnitSt
     }
   };
 
+  // 📱 MOBILE-OPTIMALISERT STØRRELSER
+  const getMarkerRadius = () => {
+    return isMobile ? 12 : 10; // SAME størrelse for ALLE markers
+  };
+
+  const getBlockRingRadius = () => {
+    return isMobile ? 16 : 14; // Ring rundt blokker - større enn marker
+  };
+
+  const getBorderWeight = () => {
+    return isMobile ? 3 : 2; // Tjukkare border på mobile
+  };
 
   return (
     <>
-      {/* 🎯 BULLSEYE RING-EKSPLOSJON */}
+      {/* 🎯 BULLSEYE RING-EKSPLOSJON - MARKER-POSISJONERT */}
       {ringExplosion && (
         <>
           <div style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
+            position: 'absolute',
+            top: ringExplosion.y + 'px',
+            left: ringExplosion.x + 'px',
             transform: 'translate(-50%, -50%)',
             width: '20px',
             height: '20px',
@@ -93,9 +137,9 @@ export const Markers = React.memo(function Markers({ visibleBlocks, updateUnitSt
           }} />
 
           <div style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
+            position: 'absolute',
+            top: ringExplosion.y + 'px',
+            left: ringExplosion.x + 'px',
             transform: 'translate(-50%, -50%)',
             width: '20px',
             height: '20px',
@@ -108,9 +152,9 @@ export const Markers = React.memo(function Markers({ visibleBlocks, updateUnitSt
           }} />
 
           <div style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
+            position: 'absolute',
+            top: ringExplosion.y + 'px',
+            left: ringExplosion.x + 'px',
             transform: 'translate(-50%, -50%)',
             width: '20px',
             height: '20px',
@@ -123,11 +167,11 @@ export const Markers = React.memo(function Markers({ visibleBlocks, updateUnitSt
           }} />
 
           <div style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
+            position: 'absolute',
+            top: ringExplosion.y + 'px',
+            left: ringExplosion.x + 'px',
             transform: 'translate(-50%, -50%)',
-            fontSize: '3rem',
+            fontSize: isMobile ? '2.5rem' : '3rem',
             animation: 'centerPulse 1.5s ease-out forwards',
             zIndex: 10000,
             pointerEvents: 'none'
@@ -146,8 +190,8 @@ export const Markers = React.memo(function Markers({ visibleBlocks, updateUnitSt
             transform: translate(-50%, -50%) scale(1);
           }
           100% {
-            width: 600px;
-            height: 600px;
+            width: ${isMobile ? '400px' : '600px'};
+            height: ${isMobile ? '400px' : '600px'};
             opacity: 0;
             transform: translate(-50%, -50%) scale(1);
           }
@@ -176,20 +220,29 @@ export const Markers = React.memo(function Markers({ visibleBlocks, updateUnitSt
       {blocksToShow.map(({ blokkId, lat, lon, units }) => {
         const isBlock = units.length > 1;
         const color = getBlockColor(units);
+        const markerRadius = getMarkerRadius(); // Same for alle
+        const ringRadius = getBlockRingRadius();
+        const borderWeight = getBorderWeight();
 
         return (
           <React.Fragment key={blokkId}>
+            {/* Ring BERRE rundt blokker */}
             {isBlock && (
               <CircleMarker
                 center={[lat, lon]}
-                radius={14}
-                pathOptions={blockRing}
+                radius={ringRadius}
+                pathOptions={{
+                  ...blockRing,
+                  weight: borderWeight
+                }}
                 interactive={false}
               />
             )}
+            
+            {/* Alle markers same størrelse */}
             <CircleMarker
               center={[lat, lon]}
-              radius={10}
+              radius={markerRadius}
               pathOptions={{
                 color: units.length === 1
                   ? singleUnitColors[units[0].status || 'Ubehandlet'].border
@@ -198,20 +251,20 @@ export const Markers = React.memo(function Markers({ visibleBlocks, updateUnitSt
                   ? singleUnitColors[units[0].status || 'Ubehandlet'].fill
                   : color,
                 fillOpacity: 0.8,
-                weight: 2,
+                weight: borderWeight,
               }}
             >
               <Popup
                 ref={(popup) => {
                   if (popup) {
-                    popupRefs.current[blokkId] = popup; // 👈 LAGRE REFERANSE
+                    popupRefs.current[blokkId] = popup;
                   }
                 }}
                 autoPan
-                autoPanPadding={[20, 20]}
-                maxWidth={400}
-                maxHeight={window.innerHeight * 0.7}
-                autoClose={false}  // 👈 ENDRA: La oss kontrollere lukkinga manuelt
+                autoPanPadding={isMobile ? [40, 40] : [20, 20]}
+                maxWidth={isMobile ? 320 : 400}
+                maxHeight={window.innerHeight * (isMobile ? 0.6 : 0.7)}
+                autoClose={false}
                 closeOnClick={true}
               >
                 <PopupContent
