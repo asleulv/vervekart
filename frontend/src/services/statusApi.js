@@ -44,5 +44,19 @@ export const statusApi = {
     }
     
     return response.json();
+  },
+
+   async getStatusesInBounds(bounds) {
+    const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/get-statuses-bounds`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bounds)
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch statuses in bounds');
+    }
+    
+    return response.json();
   }
 };

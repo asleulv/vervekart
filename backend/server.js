@@ -54,9 +54,9 @@ app.post('/api/register-user', (req, res) => {
   );
 });
 
-// 💾 LAGRE STATUS MED FULL HISTORIKK
+// 💾 LAGRE STATUS MED FULL HISTORIKK + KOORDINATER
 app.post('/api/save-status', (req, res) => {
-  const { lokalid, status, address_text, kommune, fylke, user_name, user_id } = req.body;
+  const { lokalid, status, address_text, kommune, fylke, user_name, user_id, lat, lon } = req.body;
   
   // Hent noverande status først
   db.get(
@@ -67,12 +67,12 @@ app.post('/api/save-status', (req, res) => {
       
       // Start transaction
       db.serialize(() => {
-        // 1. Oppdater/lag noverande status
+        // 1. Oppdater/lag noverande status MED KOORDINATER
         db.run(`
           INSERT OR REPLACE INTO address_current_status 
-          (lokalid, address_text, kommune, fylke, current_status, last_changed_by, last_changed_at)
-          VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        `, [lokalid, address_text, kommune, fylke, status, user_id]);
+          (lokalid, address_text, kommune, fylke, current_status, last_changed_by, last_changed_at, lat, lon)
+          VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
+        `, [lokalid, address_text, kommune, fylke, status, user_id, lat, lon]);
 
         // 2. Legg til i historikk
         db.run(`
@@ -85,12 +85,13 @@ app.post('/api/save-status', (req, res) => {
             return res.status(500).json({ error: 'Failed to save history' });
           }
           
-          console.log(`✅ HISTORIKK: ${address_text} | ${oldStatus} → ${status} | av ${user_name}`);
+          console.log(`✅ HISTORIKK: ${address_text} | ${oldStatus} → ${status} | av ${user_name} | coords: ${lat},${lon}`);
           res.json({ 
             success: true, 
             history_id: this.lastID,
             old_status: oldStatus,
-            new_status: status
+            new_status: status,
+            coordinates: lat && lon ? { lat, lon } : null
           });
         });
       });
@@ -98,8 +99,80 @@ app.post('/api/save-status', (req, res) => {
   );
 });
 
-// 📊 HENT STATUSAR (som før)
+// 🎯 NY: HENT STATUSAR FOR SPESIFIKKE BOUNDS (SPATIAL FILTERING)
+app.post('/api/get-statuses-bounds', (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const bounds = req.body;
+    
+    // Validate bounds
+    if (!bounds || !['north', 'south', 'east', 'west'].every(k => k in bounds)) {
+      return res.status(400).json({ error: 'Invalid bounds provided' });
+    }
+    
+    const { north, south, east, west } = bounds;
+    
+    // Convert to numbers and validate
+    const n = parseFloat(north);
+    const s = parseFloat(south);
+    const e = parseFloat(east);
+    const w = parseFloat(west);
+    
+    if ([n, s, e, w].some(v => isNaN(v))) {
+      return res.status(400).json({ error: 'Invalid coordinate values' });
+    }
+    
+    // SQL query with geographic filtering
+    const sql = `
+      SELECT 
+        lokalid, 
+        current_status, 
+        lat, 
+        lon, 
+        address_text, 
+        kommune, 
+        fylke, 
+        last_changed_at
+      FROM address_current_status 
+      WHERE lat BETWEEN ? AND ? 
+        AND lon BETWEEN ? AND ?
+      ORDER BY last_changed_at DESC
+    `;
+    
+    db.all(sql, [s, n, w, e], (err, rows) => {
+      if (err) {
+        console.error('Database error in get-statuses-bounds:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      // Convert to same format as existing endpoint
+      const statuses = {};
+      rows.forEach(row => {
+        statuses[row.lokalid] = row.current_status;
+      });
+      
+      const executionTime = Date.now() - startTime;
+      console.log(`🎯 BOUNDS QUERY: ${rows.length} statuses in ${executionTime}ms | Bounds: ${s},${w} to ${n},${e}`);
+      
+      res.json({ 
+        statuses,
+        bounds: { north: n, south: s, east: e, west: w },
+        count: rows.length,
+        execution_time_ms: executionTime
+      });
+    });
+    
+  } catch (error) {
+    const executionTime = Date.now() - startTime;
+    console.error(`❌ Error in get-statuses-bounds after ${executionTime}ms:`, error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 📊 HENT STATUSAR (GLOBAL - FALLBACK)
 app.post('/api/get-statuses', (req, res) => {
+  const startTime = Date.now();
   const sql = `SELECT lokalid, current_status FROM address_current_status`;
   
   db.all(sql, [], (err, rows) => {
@@ -113,8 +186,9 @@ app.post('/api/get-statuses', (req, res) => {
       statuses[row.lokalid] = row.current_status;
     });
     
-    console.log(`📊 Returned ${rows.length} current statuses`);
-    res.json({ statuses });
+    const executionTime = Date.now() - startTime;
+    console.log(`📊 GLOBAL QUERY: ${rows.length} statuses in ${executionTime}ms`);
+    res.json({ statuses, count: rows.length, execution_time_ms: executionTime });
   });
 });
 

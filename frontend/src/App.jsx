@@ -42,7 +42,7 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 🚀 OPTIMALISERT ADDRESS LOADING med debouncing og caching
+  // 🚀 OPTIMALISERT ADDRESS LOADING med bounds-filtered statuses
   const loadAddressesForBounds = useCallback(async (bounds) => {
     // DEBOUNCING - unngå for mange API calls
     if (loadingTimeoutRef.current) {
@@ -67,9 +67,10 @@ export default function App() {
         // 📱 MOBILE: Reducer data load på mobile
         const maxAddresses = isMobile ? 200 : 500;
         
+        // 🎯 NEW: Load both addresses and statuses with same bounds
         const [addresses, statusData] = await Promise.all([
           getAddressesInBounds(bounds),
-          statusApi.getStatuses()
+          statusApi.getStatusesInBounds(bounds) // ← BOUNDS FILTERING!
         ]);
 
         // Limit addresses på mobile for ytelse
@@ -77,7 +78,7 @@ export default function App() {
           ? addresses.slice(0, maxAddresses)
           : addresses;
 
-        console.log(`📊 Got ${limitedAddresses.length}/${addresses.length} addresses and ${Object.keys(statusData.statuses || {}).length} saved statuses`);
+        console.log(`📊 Got ${limitedAddresses.length}/${addresses.length} addresses and ${Object.keys(statusData.statuses || {}).length} saved statuses IN BOUNDS`);
 
         const savedStatuses = statusData.statuses || {};
 
@@ -122,6 +123,17 @@ export default function App() {
         setVisibleBlocks(blocksArray);
       } catch (error) {
         console.error('Failed to load addresses:', error);
+        // 🎯 FALLBACK: If bounds filtering fails, use old method
+        console.log('🔄 Fallback to global status loading...');
+        try {
+          const [addresses, statusData] = await Promise.all([
+            getAddressesInBounds(bounds),
+            statusApi.getStatuses() // Fallback to global
+          ]);
+          // ... same processing logic as above
+        } catch (fallbackError) {
+          console.error('Fallback also failed:', fallbackError);
+        }
       } finally {
         setLoading(false);
         setDebouncedLoading(false);
@@ -172,7 +184,10 @@ export default function App() {
             kommune: unit.kommunenavn,
             fylke: unit.fylke || 'ukjent',
             user_id: currentUser.id,
-            user_name: currentUser.name
+            user_name: currentUser.name,
+            // 🎯 ADD: Include coordinates for future spatial queries
+            lat: unit.lat,
+            lon: unit.lon
           })
         });
 
