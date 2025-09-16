@@ -6,7 +6,7 @@ const sqlite3 = require('sqlite3').verbose();
 // const db = new sqlite3.Database('./vervekart.db');
 
 // Use your exact production database path
-const db = new sqlite3.Database('/var/www/vervekart-api/vervekart.db');
+const db = new sqlite3.Database('/var/www/vervekart/backend/vervekart.db');
 
 console.log('🔧 Starting LOCAL coordinate migration...');
 console.log('📂 Database: ./vervekart.db');
